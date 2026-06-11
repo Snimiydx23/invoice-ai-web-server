@@ -33,7 +33,7 @@ CORS(app, origins="*")
 from mistralai import Mistral
 
 def get_mistral():
-    key = os.environ.get('MISTRAL_API_KEY')
+    key = os.environ.get("MISTRAL_API_KEY")
     if not key:
         raise ValueError("MISTRAL_API_KEY not set")
     return Mistral(api_key=key)
