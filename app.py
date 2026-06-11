@@ -102,10 +102,25 @@ Rules:
 - Null for missing fields
 - Extract ALL line items"""
 
+def pdf_to_images_base64(file_bytes: bytes) -> List[str]:
+    """Convert PDF pages to base64-encoded JPEG images."""
+    try:
+        from pdf2image import convert_from_bytes
+        images = convert_from_bytes(file_bytes, dpi=200, fmt='jpeg')
+        result = []
+        for img in images[:5]:  # max 5 pages
+            buf = BytesIO()
+            img.save(buf, format='JPEG', quality=90)
+            result.append(base64.b64encode(buf.getvalue()).decode('utf-8'))
+        return result
+    except Exception as e:
+        logger.warning(f"pdf2image failed: {e}")
+        return []
+
+
 def extract_with_mistral(file_bytes: bytes, filename: str, mimetype: str, ocr_text: str = "") -> Dict:
     """Use Mistral pixtral to extract invoice data."""
     client = get_mistral()
-    base64_data = base64.b64encode(file_bytes).decode('utf-8')
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
 
     content_parts = []
@@ -119,11 +134,21 @@ def extract_with_mistral(file_bytes: bytes, filename: str, mimetype: str, ocr_te
 
     # Attach file
     if mimetype == 'application/pdf' or ext == 'pdf':
-        content_parts.append({
-            "type": "document_url",
-            "document_url": f"data:application/pdf;base64,{base64_data}"
-        })
+        # Convert PDF pages to images (pixtral does not support document_url)
+        page_images = pdf_to_images_base64(file_bytes)
+        if page_images:
+            for img_b64 in page_images:
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": f"data:image/jpeg;base64,{img_b64}"
+                })
+        elif ocr_text:
+            # Fallback: text-only if pdf2image failed
+            content_parts = [{"type": "text", "text": f"{EXTRACTION_PROMPT}\n\nINVOICE TEXT:\n{ocr_text[:12000]}"}]
+        else:
+            raise ValueError("PDF conversion to images failed and no OCR text available")
     elif mimetype.startswith('image/') or ext in ('png', 'jpg', 'jpeg', 'tiff', 'bmp', 'webp'):
+        base64_data = base64.b64encode(file_bytes).decode('utf-8')
         content_parts.append({
             "type": "image_url",
             "image_url": f"data:{mimetype};base64,{base64_data}"
