@@ -27,7 +27,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, origins="*")
+CORS(app, 
+     origins=[
+         "https://invoice-ai-web-opal.vercel.app",
+         "http://localhost:3000",
+         "http://localhost:5173"
+     ],
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True
+)
 
 # ── Mistral Client ────────────────────────────────────────────────────────────
 from mistralai import Mistral
